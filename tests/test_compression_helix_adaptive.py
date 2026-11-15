@@ -1,1 +1,61 @@
-"""Tests for AdaptiveHybridStore: bit-depth selection by tolerance."""\n\nimport numpy as np\nimport pytest\n\nfrom compression_helix import AdaptiveHybridStore, HybridStore\n\n\ndef _smooth_matrix(rows=16, cols=32):\n    t = np.linspace(0.0, 2.0 * np.pi, cols, endpoint=False)\n    return np.outer(np.sin(t), np.cos(t))\n\n\ndef test_put_adaptive_meets_tight_tolerance_with_more_bits():\n    store = AdaptiveHybridStore()\n    W = _smooth_matrix()\n    stats = store.put_adaptive("m1", W, tolerance=0.001)\n    assert stats["relative_rmse"] <= 0.001\n    assert stats["bits"] >= 8\n\n\ndef test_put_adaptive_uses_fewer_bits_for_loose_tolerance():\n    store = AdaptiveHybridStore()\n    W = _smooth_matrix()\n    loose = store.put_adaptive("loose", W, tolerance=0.5)\n    tight = store.put_adaptive("tight", W, tolerance=0.001)\n    assert loose["bits"] <= tight["bits"]\n    assert loose["ratio"] >= tight["ratio"]\n\n\ndef test_get_returns_stored_matrix():\n    store = AdaptiveHybridStore()\n    W = _smooth_matrix()\n    store.put_adaptive("m1", W, tolerance=0.001)\n    recon = store.get("m1")\n    assert recon.shape == W.shape\n    assert float(np.max(np.abs(recon - W))) < 0.01\n\n\ndef test_compression_report_lists_all_models():\n    store = AdaptiveHybridStore()\n    store.put_adaptive("a", _smooth_matrix())\n    store.put_adaptive("b", _smooth_matrix())\n    report = store.compression_report()\n    assert sorted(report) == ["a", "b"]\n    assert all("bits" in v and "ratio" in v for v in report.values())\n\n\ndef test_validation():\n    with pytest.raises(ValueError):\n        AdaptiveHybridStore(tolerance=0.0)\n    store = AdaptiveHybridStore()\n    with pytest.raises(ValueError):\n        store.put_adaptive("", _smooth_matrix())\n    with pytest.raises(ValueError):\n        store.put_adaptive("bad", np.zeros(4))\n\n\ndef test_base_class_still_available():\n    store = HybridStore()\n    assert len(store) == 0\n
+"""Tests for AdaptiveHybridStore: bit-depth selection by tolerance."""
+
+import numpy as np
+import pytest
+
+from compression_helix import AdaptiveHybridStore, HybridStore
+
+
+def _smooth_matrix(rows=16, cols=32):
+    t = np.linspace(0.0, 2.0 * np.pi, cols, endpoint=False)
+    return np.outer(np.sin(t), np.cos(t))
+
+
+def test_put_adaptive_meets_tight_tolerance_with_more_bits():
+    store = AdaptiveHybridStore()
+    W = _smooth_matrix()
+    stats = store.put_adaptive("m1", W, tolerance=0.001)
+    assert stats["relative_rmse"] <= 0.001
+    assert stats["bits"] >= 8
+
+
+def test_put_adaptive_uses_fewer_bits_for_loose_tolerance():
+    store = AdaptiveHybridStore()
+    W = _smooth_matrix()
+    loose = store.put_adaptive("loose", W, tolerance=0.5)
+    tight = store.put_adaptive("tight", W, tolerance=0.001)
+    assert loose["bits"] <= tight["bits"]
+    assert loose["ratio"] >= tight["ratio"]
+
+
+def test_get_returns_stored_matrix():
+    store = AdaptiveHybridStore()
+    W = _smooth_matrix()
+    store.put_adaptive("m1", W, tolerance=0.001)
+    recon = store.get("m1")
+    assert recon.shape == W.shape
+    assert float(np.max(np.abs(recon - W))) < 0.01
+
+
+def test_compression_report_lists_all_models():
+    store = AdaptiveHybridStore()
+    store.put_adaptive("a", _smooth_matrix())
+    store.put_adaptive("b", _smooth_matrix())
+    report = store.compression_report()
+    assert sorted(report) == ["a", "b"]
+    assert all("bits" in v and "ratio" in v for v in report.values())
+
+
+def test_validation():
+    with pytest.raises(ValueError):
+        AdaptiveHybridStore(tolerance=0.0)
+    store = AdaptiveHybridStore()
+    with pytest.raises(ValueError):
+        store.put_adaptive("", _smooth_matrix())
+    with pytest.raises(ValueError):
+        store.put_adaptive("bad", np.zeros(4))
+
+
+def test_base_class_still_available():
+    store = HybridStore()
+    assert len(store) == 0
